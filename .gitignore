@@ -1,0 +1,14 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+*.ablx
+
+# local Live host path / secrets
+.env
+
+# local databases / scratch
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

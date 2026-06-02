@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Track Notes &amp; TODO</title>
+  <style>
+    /* ---------- Reset ---------- */
+    *, *::before, *::after { box-sizing: border-box; }
+    * { margin: 0; }
+    input, button, textarea { font: inherit; color: inherit; }
+
+    /* ---------- Live dark theme tokens ---------- */
+    :root {
+      --p-bg: hsl(0, 0%, 21%);
+      --p-bg-2: hsl(0, 0%, 17%);
+      --p-control: hsl(0, 0%, 16%);
+      --p-control-hi: hsl(0, 0%, 24%);
+      --p-input: hsl(0, 0%, 12%);
+      --p-text: hsl(0, 0%, 78%);
+      --p-text-2: hsl(0, 0%, 48%);
+      --p-border: hsl(0, 0%, 8%);
+      --p-accent: hsl(31, 100%, 67%);
+      --p-on-accent: hsl(0, 0%, 7%);
+      --p-done: hsl(140, 35%, 55%);
+      --radius: 4px;
+    }
+
+    html {
+      background: var(--p-bg);
+      color: var(--p-text);
+      font-family: "AbletonSansSmall", system-ui, sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      -webkit-font-smoothing: antialiased;
+      height: 100%;
+    }
+    body { height: 100%; }
+
+    #app {
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      max-height: 100vh;
+    }
+
+    /* ---------- Header ---------- */
+    .header {
+      padding: 12px 16px 8px;
+      border-bottom: 1px solid var(--p-border);
+      background: var(--p-bg-2);
+    }
+    .header .eyebrow {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--p-text-2);
+    }
+    .header .track {
+      font-size: 18px;
+      font-weight: 600;
+      margin-top: 2px;
+      color: var(--p-text);
+      word-break: break-all;
+    }
+    .header .project {
+      margin-top: 3px;
+      font-size: 10.5px;
+      color: var(--p-text-2);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      direction: rtl;
+      text-align: left;
+    }
+
+    /* ---------- Tabs ---------- */
+    .tabs {
+      display: flex;
+      gap: 2px;
+      padding: 8px 12px 0;
+      background: var(--p-bg-2);
+      border-bottom: 1px solid var(--p-border);
+    }
+    .tab {
+      appearance: none;
+      border: 1px solid transparent;
+      border-bottom: none;
+      background: transparent;
+      color: var(--p-text-2);
+      padding: 6px 14px;
+      border-radius: var(--radius) var(--radius) 0 0;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .tab:hover { color: var(--p-text); }
+    .tab.active {
+      color: var(--p-text);
+      background: var(--p-bg);
+      border-color: var(--p-border);
+    }
+    .tab .badge {
+      display: inline-block;
+      min-width: 16px;
+      padding: 0 4px;
+      margin-left: 6px;
+      border-radius: 8px;
+      background: var(--p-control);
+      color: var(--p-text-2);
+      font-size: 10px;
+      text-align: center;
+    }
+    .tab.active .badge { background: var(--p-accent); color: var(--p-on-accent); }
+
+    /* ---------- Panes ---------- */
+    .panes { overflow: auto; padding: 14px 16px; }
+    .pane { display: none; height: 100%; }
+    .pane.active { display: block; }
+
+    /* Memo */
+    #memo {
+      width: 100%;
+      min-height: 240px;
+      height: calc(100% - 26px);
+      resize: none;
+      background: var(--p-input);
+      border: 1px solid var(--p-border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      line-height: 1.6;
+      outline-offset: 0;
+    }
+    #memo:focus { outline: 2px solid var(--p-text-2); }
+    .pane-foot { margin-top: 6px; font-size: 10.5px; color: var(--p-text-2); }
+
+    /* TODO */
+    .todo-add {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .input {
+      flex: 1;
+      background: var(--p-input);
+      border: 1px solid var(--p-border);
+      border-radius: var(--radius);
+      height: 26px;
+      padding: 0 10px;
+      outline-offset: 0;
+    }
+    .input:focus { outline: 2px solid var(--p-text-2); }
+
+    .btn {
+      background: var(--p-control);
+      border: 1px solid var(--p-border);
+      color: var(--p-text);
+      height: 26px;
+      padding: 0 14px;
+      border-radius: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+      user-select: none;
+    }
+    .btn:hover { background: var(--p-control-hi); }
+    .btn:active { background: var(--p-accent); color: var(--p-on-accent); }
+    .btn:focus-visible { outline: 2px solid var(--p-text-2); }
+    .btn.primary { background: var(--p-accent); color: var(--p-on-accent); border-color: var(--p-border); }
+    .btn.primary:hover { filter: brightness(1.08); }
+    .btn.ghost { background: transparent; }
+
+    ul.todo-list, ul.history-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+
+    .todo {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 10px;
+      background: var(--p-control);
+      border: 1px solid var(--p-border);
+      border-radius: var(--radius);
+      padding: 8px 10px;
+    }
+    .todo input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--p-accent); cursor: pointer; }
+    .todo .body { min-width: 0; }
+    .todo .text {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid transparent;
+      padding: 2px 0;
+    }
+    .todo .text:focus { outline: none; border-bottom-color: var(--p-text-2); }
+    .todo.done .text { color: var(--p-text-2); text-decoration: line-through; }
+    .todo .meta { font-size: 10px; color: var(--p-text-2); margin-top: 2px; }
+    .todo .del {
+      background: transparent;
+      border: none;
+      color: var(--p-text-2);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: var(--radius);
+    }
+    .todo .del:hover { color: var(--p-text); background: var(--p-input); }
+
+    .empty { color: var(--p-text-2); padding: 20px 4px; text-align: center; }
+
+    /* History */
+    .history-item {
+      background: var(--p-control);
+      border: 1px solid var(--p-border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .history-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+    .history-head:hover { background: var(--p-control-hi); }
+    .history-when { font-weight: 600; }
+    .history-summary { font-size: 10.5px; color: var(--p-text-2); }
+    .history-body { display: none; padding: 4px 10px 12px; border-top: 1px solid var(--p-border); }
+    .history-item.open .history-body { display: block; }
+    .history-body h4 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--p-text-2); margin: 10px 0 4px; }
+    .snapshot-memo {
+      white-space: pre-wrap;
+      background: var(--p-input);
+      border: 1px solid var(--p-border);
+      border-radius: var(--radius);
+      padding: 8px 10px;
+      max-height: 160px;
+      overflow: auto;
+    }
+    .snap-todo { padding: 3px 0; border-bottom: 1px dotted var(--p-border); font-size: 11px; }
+    .snap-todo.done { color: var(--p-text-2); text-decoration: line-through; }
+
+    /* ---------- Footer ---------- */
+    .footer {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border-top: 1px solid var(--p-border);
+      background: var(--p-bg-2);
+    }
+    .footer .status { font-size: 10.5px; color: var(--p-text-2); flex: 1; }
+    .footer .status .dot { color: var(--p-accent); }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <header class="header">
+      <div class="eyebrow">Track Notes &amp; TODO</div>
+      <div class="track" id="track-name">—</div>
+      <div class="project" id="project-label"></div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="memo">メモ</button>
+      <button class="tab" data-tab="todo">TODO <span class="badge" id="todo-badge">0</span></button>
+      <button class="tab" data-tab="history">履歴 <span class="badge" id="history-badge">0</span></button>
+    </nav>
+
+    <main class="panes">
+      <section class="pane active" data-pane="memo">
+        <textarea id="memo" placeholder="このトラックについてのメモ…（楽器、設定、アイデア、ミックスのメモなど）"></textarea>
+        <div class="pane-foot" id="memo-foot"></div>
+      </section>
+
+      <section class="pane" data-pane="todo">
+        <div class="todo-add">
+          <input class="input" id="todo-input" type="text" placeholder="TODO を追加してEnter…" />
+          <button class="btn" id="todo-add-btn">追加</button>
+        </div>
+        <ul class="todo-list" id="todo-list"></ul>
+      </section>
+
+      <section class="pane" data-pane="history">
+        <ul class="history-list" id="history-list"></ul>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="status" id="status"></div>
+      <button class="btn ghost" id="cancel-btn">キャンセル</button>
+      <button class="btn primary" id="save-btn">保存</button>
+    </footer>
+  </div>
+
+  <script>
+    // ---- Initial state injected by the extension (extension.ts replaces the token). ----
+    const STATE = /*__INITIAL_STATE__*/null || {
+      project: "(dev)",
+      trackKey: "Demo",
+      name: "Demo Track",
+      memo: "",
+      memoUpdatedAt: null,
+      todos: [],
+      history: [],
+    };
+
+    // ---- Host messaging (mac WebKit / Windows WebView2) ----
+    const webkitHandler =
+      window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.live;
+    const webview2 = window.chrome && window.chrome.webview;
+    function postToHost(message) {
+      if (webkitHandler) webkitHandler.postMessage(message);
+      else if (webview2) webview2.postMessage(message);
+    }
+    function closeWith(result) {
+      postToHost({ method: "close_and_send", params: [JSON.stringify(result)] });
+    }
+
+    // ---- Working model ----
+    let dirty = false;
+    let nextLocalId = -1; // negative ids for not-yet-saved todos
+    const model = {
+      memo: STATE.memo || "",
+      memoUpdatedAt: STATE.memoUpdatedAt || null,
+      todos: (STATE.todos || []).map((t) => ({
+        id: t.id,
+        text: t.text,
+        done: !!t.done,
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt,
+      })),
+      history: STATE.history || [],
+    };
+
+    function markDirty() {
+      if (!dirty) {
+        dirty = true;
+        renderStatus();
+      }
+    }
+
+    // ---- Date formatting ----
+    function fmt(iso) {
+      if (!iso) return "—";
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    function rel(iso) {
+      if (!iso) return "";
+      const diff = Date.now() - new Date(iso).getTime();
+      const m = Math.round(diff / 60000);
+      if (m < 1) return "たった今";
+      if (m < 60) return `${m}分前`;
+      const h = Math.round(m / 60);
+      if (h < 24) return `${h}時間前`;
+      const days = Math.round(h / 24);
+      return `${days}日前`;
+    }
+    function esc(s) {
+      return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    }
+
+    // ---- Rendering ----
+    function renderHeader() {
+      document.getElementById("track-name").textContent = STATE.name || STATE.trackKey || "(名称未設定)";
+      document.getElementById("project-label").textContent = "Project: " + (STATE.project || "—");
+    }
+
+    function renderMemo() {
+      const ta = document.getElementById("memo");
+      ta.value = model.memo;
+      const foot = document.getElementById("memo-foot");
+      foot.textContent = model.memoUpdatedAt
+        ? `最終更新: ${fmt(model.memoUpdatedAt)}（${rel(model.memoUpdatedAt)}）`
+        : "まだ保存されていません";
+    }
+
+    function renderTodos() {
+      const list = document.getElementById("todo-list");
+      const sorted = [...model.todos].sort((a, b) => Number(a.done) - Number(b.done));
+      const active = model.todos.filter((t) => !t.done).length;
+      document.getElementById("todo-badge").textContent = String(active);
+
+      if (model.todos.length === 0) {
+        list.innerHTML = '<li class="empty">TODO はまだありません。上の入力欄から追加できます。</li>';
+        return;
+      }
+      list.innerHTML = "";
+      for (const t of sorted) {
+        const li = document.createElement("li");
+        li.className = "todo" + (t.done ? " done" : "");
+        const created = t.createdAt ? `作成 ${fmt(t.createdAt)}` : "新規";
+        const updated = t.updatedAt && t.updatedAt !== t.createdAt ? ` · 更新 ${fmt(t.updatedAt)}` : "";
+        li.innerHTML =
+          `<input type="checkbox" ${t.done ? "checked" : ""} />` +
+          `<div class="body">` +
+          `<input class="text" type="text" value="${esc(t.text)}" />` +
+          `<div class="meta">${created}${updated}</div>` +
+          `</div>` +
+          `<button class="del" title="削除">×</button>`;
+
+        const cb = li.querySelector('input[type="checkbox"]');
+        cb.addEventListener("change", () => {
+          t.done = cb.checked;
+          markDirty();
+          renderTodos();
+        });
+        const txt = li.querySelector(".text");
+        txt.addEventListener("input", () => {
+          t.text = txt.value;
+          markDirty();
+        });
+        li.querySelector(".del").addEventListener("click", () => {
+          model.todos = model.todos.filter((x) => x !== t);
+          markDirty();
+          renderTodos();
+        });
+        list.appendChild(li);
+      }
+    }
+
+    function renderHistory() {
+      const list = document.getElementById("history-list");
+      document.getElementById("history-badge").textContent = String(model.history.length);
+      if (model.history.length === 0) {
+        list.innerHTML = '<li class="empty">保存履歴はまだありません。保存するとここに記録されます。</li>';
+        return;
+      }
+      list.innerHTML = "";
+      for (const h of model.history) {
+        const li = document.createElement("li");
+        li.className = "history-item";
+        const todosHtml = (h.todos || [])
+          .map((t) => `<div class="snap-todo ${t.done ? "done" : ""}">${t.done ? "☑" : "☐"} ${esc(t.text)}</div>`)
+          .join("");
+        li.innerHTML =
+          `<div class="history-head">` +
+          `<span class="history-when">${fmt(h.savedAt)} <span class="history-summary">（${rel(h.savedAt)}）</span></span>` +
+          `<span class="history-summary">${esc(h.summary || "")}</span>` +
+          `</div>` +
+          `<div class="history-body">` +
+          `<h4>メモ</h4><div class="snapshot-memo">${h.memo ? esc(h.memo) : "<span style='color:var(--p-text-2)'>（空）</span>"}</div>` +
+          `<h4>TODO（${(h.todos || []).length}）</h4>${todosHtml || '<div class="snap-todo">（なし）</div>'}` +
+          `<div style="margin-top:12px"><button class="btn restore">この状態を復元</button></div>` +
+          `</div>`;
+
+        li.querySelector(".history-head").addEventListener("click", () => li.classList.toggle("open"));
+        li.querySelector(".restore").addEventListener("click", (e) => {
+          e.stopPropagation();
+          restoreFrom(h);
+        });
+        list.appendChild(li);
+      }
+    }
+
+    function restoreFrom(h) {
+      model.memo = h.memo || "";
+      // Restored todos become new entries on next save (fresh timestamps).
+      model.todos = (h.todos || []).map((t) => ({
+        id: nextLocalId--,
+        text: t.text,
+        done: !!t.done,
+        createdAt: null,
+        updatedAt: null,
+      }));
+      markDirty();
+      renderMemo();
+      renderTodos();
+      switchTab("memo");
+      setStatus("履歴から復元しました（保存するまで確定しません）");
+    }
+
+    function renderStatus() {
+      const el = document.getElementById("status");
+      el.innerHTML = dirty ? '<span class="dot">●</span> 未保存の変更があります' : "変更なし";
+    }
+    let statusTimer = null;
+    function setStatus(msg) {
+      const el = document.getElementById("status");
+      el.textContent = msg;
+      if (statusTimer) clearTimeout(statusTimer);
+      statusTimer = setTimeout(renderStatus, 2500);
+    }
+
+    // ---- Tabs ----
+    function switchTab(name) {
+      document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+      document.querySelectorAll(".pane").forEach((p) => p.classList.toggle("active", p.dataset.pane === name));
+    }
+
+    // ---- TODO add ----
+    function addTodo() {
+      const input = document.getElementById("todo-input");
+      const text = input.value.trim();
+      if (!text) return;
+      model.todos.push({ id: nextLocalId--, text, done: false, createdAt: null, updatedAt: null });
+      input.value = "";
+      markDirty();
+      renderTodos();
+    }
+
+    // ---- Save / Cancel ----
+    function save() {
+      model.memo = document.getElementById("memo").value;
+      const todos = model.todos
+        .map((t) => ({ id: typeof t.id === "number" && t.id > 0 ? t.id : null, text: t.text.trim(), done: !!t.done }))
+        .filter((t) => t.text.length > 0);
+      closeWith({ action: "save", memo: model.memo, todos });
+    }
+    function cancel() {
+      closeWith({ action: "cancel" });
+    }
+
+    // ---- Wire up ----
+    document.addEventListener("DOMContentLoaded", () => {
+      renderHeader();
+      renderMemo();
+      renderTodos();
+      renderHistory();
+      renderStatus();
+
+      document.querySelectorAll(".tab").forEach((t) =>
+        t.addEventListener("click", () => switchTab(t.dataset.tab)),
+      );
+      document.getElementById("memo").addEventListener("input", (e) => {
+        model.memo = e.target.value;
+        markDirty();
+      });
+      document.getElementById("todo-add-btn").addEventListener("click", addTodo);
+      document.getElementById("todo-input").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") addTodo();
+      });
+      document.getElementById("save-btn").addEventListener("click", save);
+      document.getElementById("cancel-btn").addEventListener("click", cancel);
+
+      document.addEventListener("keydown", (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+          e.preventDefault();
+          save();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          cancel();
+        }
+      });
+
+      document.getElementById("memo").focus();
+    });
+  </script>
+</body>
+
+</html>

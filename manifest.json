@@ -1,0 +1,7 @@
+{
+  "name": "Track Notes & TODO",
+  "author": "takahashitoru",
+  "entry": "dist/extension.js",
+  "version": "0.1.0",
+  "minimumApiVersion": "1.0.0"
+}
