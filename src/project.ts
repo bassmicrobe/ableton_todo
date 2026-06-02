@@ -16,7 +16,6 @@
 //     until Live is relaunched (the result is cached per session).
 
 import { createHash } from "node:crypto";
-import { tmpdir } from "node:os";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import type { Environment, Resources } from "@ableton-extensions/sdk";
@@ -41,27 +40,37 @@ export async function resolveProject(
 ): Promise<ProjectStorage> {
   if (cached) return cached;
 
-  const storageRoot = environment.storageDirectory ?? environment.tempDirectory ?? tmpdir();
-  const dbDir = path.join(storageRoot, "projects");
-  fs.mkdirSync(dbDir, { recursive: true });
+  // Under the Extension Host's permission model only storageDirectory and
+  // tempDirectory are writable — and creating *subdirectories* inside them is
+  // denied (mkdir raises ERR_ACCESS_DENIED). So we never mkdir; the SQLite file
+  // lives as a flat file directly inside storageDirectory.
+  const storageRoot = environment.storageDirectory ?? environment.tempDirectory;
+  if (!storageRoot) {
+    throw new Error(
+      "No writable storage directory (storageDirectory and tempDirectory are both unset).",
+    );
+  }
 
   let key = "default";
   let label = "(no project detected — shared notes)";
 
   try {
-    const probeSrc = path.join(environment.tempDirectory ?? tmpdir(), MARKER_NAME);
-    fs.writeFileSync(
-      probeSrc,
-      "This file marks the folder for the 'Track Notes & TODO' Live extension. Safe to delete.\n",
-    );
-    const importedPath = await resources.importIntoProject(probeSrc);
-    const projectDir = path.dirname(importedPath);
-    key = createHash("sha256").update(projectDir).digest("hex").slice(0, 16);
-    label = projectDir;
+    const tempDir = environment.tempDirectory;
+    if (tempDir) {
+      const probeSrc = path.join(tempDir, MARKER_NAME);
+      fs.writeFileSync(
+        probeSrc,
+        "This file marks the folder for the 'Track Notes & TODO' Live extension. Safe to delete.\n",
+      );
+      const importedPath = await resources.importIntoProject(probeSrc);
+      const projectDir = path.dirname(importedPath);
+      key = createHash("sha256").update(projectDir).digest("hex").slice(0, 16);
+      label = projectDir;
+    }
   } catch {
     // Project not saved / import unsupported — fall back to the shared database.
   }
 
-  cached = { key, label, dbPath: path.join(dbDir, `${key}.sqlite`) };
+  cached = { key, label, dbPath: path.join(storageRoot, `track-notes-${key}.sqlite`) };
   return cached;
 }
