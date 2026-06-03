@@ -32,15 +32,30 @@ export interface HistoryEntry {
 export interface TrackState {
   trackKey: string;
   name: string;
+  /** When this track was first recorded by the extension (ISO-8601), or null. */
+  createdAt: string | null;
   memo: string;
   memoUpdatedAt: string | null;
   todos: Todo[];
   history: HistoryEntry[];
 }
 
+/** Read-only digest of a child track, shown when opening a group's parent. */
+export interface ChildSummary {
+  trackKey: string;
+  name: string;
+  createdAt: string | null;
+  memo: string;
+  todoActive: number;
+  todoTotal: number;
+  todos: { text: string; done: boolean }[];
+}
+
 /** What the UI returns when the dialog closes. */
 export interface SavePayload {
   action: "save" | "cancel";
+  /** Possibly-edited track name. Renames the Live track and migrates stored notes. */
+  name?: string;
   memo: string;
   todos: { id: number | null; text: string; done: boolean }[];
 }
@@ -105,6 +120,10 @@ export class Store {
       )
       .run(trackKey, name, ts, ts);
 
+    const trackRow = this.db
+      .prepare("SELECT created_at FROM tracks WHERE track_key = ?")
+      .get(trackKey) as { created_at: string } | undefined;
+
     const memoRow = this.db
       .prepare("SELECT text, updated_at FROM memos WHERE track_key = ?")
       .get(trackKey) as { text: string; updated_at: string } | undefined;
@@ -136,6 +155,7 @@ export class Store {
     return {
       trackKey,
       name,
+      createdAt: trackRow?.created_at ?? null,
       memo: memoRow?.text ?? "",
       memoUpdatedAt: memoRow?.updated_at ?? null,
       todos: todoRows.map((r) => ({
@@ -153,6 +173,53 @@ export class Store {
         summary: r.summary,
       })),
     };
+  }
+
+  /**
+   * Read-only digest for a child track of a group. Does NOT create rows, so
+   * listing a group's children never registers tracks that were never opened.
+   */
+  loadChildSummary(trackKey: string, name: string): ChildSummary {
+    const trackRow = this.db
+      .prepare("SELECT created_at FROM tracks WHERE track_key = ?")
+      .get(trackKey) as { created_at: string } | undefined;
+    const memoRow = this.db
+      .prepare("SELECT text FROM memos WHERE track_key = ?")
+      .get(trackKey) as { text: string } | undefined;
+    const todoRows = this.db
+      .prepare("SELECT text, done FROM todos WHERE track_key = ? ORDER BY done ASC, id ASC")
+      .all(trackKey) as { text: string; done: number }[];
+
+    const todos = todoRows.map((r) => ({ text: r.text, done: r.done !== 0 }));
+    return {
+      trackKey,
+      name,
+      createdAt: trackRow?.created_at ?? null,
+      memo: memoRow?.text ?? "",
+      todoActive: todos.filter((t) => !t.done).length,
+      todoTotal: todos.length,
+      todos,
+    };
+  }
+
+  /**
+   * Moves every row from `oldKey` to `newKey` (used when a track is renamed
+   * from the panel). Any data already under `newKey` is overwritten. No-op when
+   * the keys are equal.
+   */
+  renameTrackKey(oldKey: string, newKey: string): void {
+    if (oldKey === newKey) return;
+    this.db.exec("BEGIN");
+    try {
+      for (const table of ["tracks", "memos", "todos", "history"]) {
+        this.db.prepare(`DELETE FROM ${table} WHERE track_key = ?`).run(newKey);
+        this.db.prepare(`UPDATE ${table} SET track_key = ? WHERE track_key = ?`).run(newKey, oldKey);
+      }
+      this.db.exec("COMMIT");
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
   }
 
   /**

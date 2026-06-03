@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Track Notes &amp; TODO</title>
+  <title>Track Notes</title>
   <style>
     /* ---------- Reset ---------- */
     *, *::before, *::after { box-sizing: border-box; }
@@ -23,7 +23,6 @@
       --p-border: hsl(0, 0%, 8%);
       --p-accent: hsl(31, 100%, 67%);
       --p-on-accent: hsl(0, 0%, 7%);
-      --p-done: hsl(140, 35%, 55%);
       --radius: 4px;
     }
 
@@ -57,13 +56,21 @@
       text-transform: uppercase;
       color: var(--p-text-2);
     }
-    .header .track {
+    .name-row { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+    .name-input {
+      flex: 1;
+      min-width: 0;
       font-size: 18px;
       font-weight: 600;
-      margin-top: 2px;
       color: var(--p-text);
-      word-break: break-all;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid transparent;
+      padding: 2px 0;
     }
+    .name-input:hover { border-bottom-color: var(--p-border); }
+    .name-input:focus { outline: none; border-bottom-color: var(--p-accent); }
+    .name-hint { font-size: 10px; color: var(--p-text-2); white-space: nowrap; }
     .header .project {
       margin-top: 3px;
       font-size: 10.5px;
@@ -100,6 +107,7 @@
       background: var(--p-bg);
       border-color: var(--p-border);
     }
+    .tab[hidden] { display: none; }
     .tab .badge {
       display: inline-block;
       min-width: 16px;
@@ -135,11 +143,7 @@
     .pane-foot { margin-top: 6px; font-size: 10.5px; color: var(--p-text-2); }
 
     /* TODO */
-    .todo-add {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
+    .todo-add { display: flex; gap: 8px; margin-bottom: 12px; }
     .input {
       flex: 1;
       background: var(--p-input);
@@ -169,7 +173,7 @@
     .btn.primary:hover { filter: brightness(1.08); }
     .btn.ghost { background: transparent; }
 
-    ul.todo-list, ul.history-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+    ul.todo-list, ul.history-list, ul.children-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
 
     .todo {
       display: grid;
@@ -227,7 +231,7 @@
     .history-summary { font-size: 10.5px; color: var(--p-text-2); }
     .history-body { display: none; padding: 4px 10px 12px; border-top: 1px solid var(--p-border); }
     .history-item.open .history-body { display: block; }
-    .history-body h4 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--p-text-2); margin: 10px 0 4px; }
+    .history-body h4, .child h4 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--p-text-2); margin: 10px 0 4px; }
     .snapshot-memo {
       white-space: pre-wrap;
       background: var(--p-input);
@@ -239,6 +243,30 @@
     }
     .snap-todo { padding: 3px 0; border-bottom: 1px dotted var(--p-border); font-size: 11px; }
     .snap-todo.done { color: var(--p-text-2); text-decoration: line-through; }
+
+    /* Children (group overview) */
+    .children-intro { font-size: 10.5px; color: var(--p-text-2); margin-bottom: 10px; }
+    .child {
+      background: var(--p-control);
+      border: 1px solid var(--p-border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+    }
+    .child-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+    .child-name { font-size: 13px; font-weight: 600; word-break: break-all; }
+    .child-prog { font-size: 10.5px; color: var(--p-text-2); white-space: nowrap; }
+    .child-memo {
+      white-space: pre-wrap;
+      font-size: 11px;
+      color: var(--p-text);
+      background: var(--p-input);
+      border: 1px solid var(--p-border);
+      border-radius: var(--radius);
+      padding: 6px 8px;
+      margin-top: 4px;
+      max-height: 120px;
+      overflow: auto;
+    }
 
     /* ---------- Footer ---------- */
     .footer {
@@ -257,8 +285,11 @@
 <body>
   <div id="app">
     <header class="header">
-      <div class="eyebrow">Track Notes &amp; TODO</div>
-      <div class="track" id="track-name">—</div>
+      <div class="eyebrow">Track Notes</div>
+      <div class="name-row">
+        <input class="name-input" id="track-name" type="text" placeholder="トラック名" />
+        <span class="name-hint" id="name-hint"></span>
+      </div>
       <div class="project" id="project-label"></div>
     </header>
 
@@ -266,6 +297,7 @@
       <button class="tab active" data-tab="memo">メモ</button>
       <button class="tab" data-tab="todo">TODO <span class="badge" id="todo-badge">0</span></button>
       <button class="tab" data-tab="history">履歴 <span class="badge" id="history-badge">0</span></button>
+      <button class="tab" data-tab="children" id="tab-children" hidden>子トラック <span class="badge" id="children-badge">0</span></button>
     </nav>
 
     <main class="panes">
@@ -285,6 +317,11 @@
       <section class="pane" data-pane="history">
         <ul class="history-list" id="history-list"></ul>
       </section>
+
+      <section class="pane" data-pane="children">
+        <div class="children-intro">このグループに含まれる子トラックのメモ／TODO（読み取り専用）。編集は各トラックを右クリックして開いてください。</div>
+        <ul class="children-list" id="children-list"></ul>
+      </section>
     </main>
 
     <footer class="footer">
@@ -298,8 +335,13 @@
     // ---- Initial state injected by the extension (extension.ts replaces the token). ----
     const STATE = /*__INITIAL_STATE__*/null || {
       project: "(dev)",
-      trackKey: "Demo",
-      name: "Demo Track",
+      isGroup: true,
+      children: [
+        { name: "Kick", memo: "サイドチェイン用", todoActive: 1, todoTotal: 2, todos: [{ text: "EQ", done: true }, { text: "音量調整", done: false }] },
+        { name: "Snare", memo: "", todoActive: 0, todoTotal: 0, todos: [] },
+      ],
+      trackKey: "Drums",
+      name: "Drums",
       memo: "",
       memoUpdatedAt: null,
       todos: [],
@@ -322,23 +364,18 @@
     let dirty = false;
     let nextLocalId = -1; // negative ids for not-yet-saved todos
     const model = {
+      name: STATE.name || "",
       memo: STATE.memo || "",
       memoUpdatedAt: STATE.memoUpdatedAt || null,
       todos: (STATE.todos || []).map((t) => ({
-        id: t.id,
-        text: t.text,
-        done: !!t.done,
-        createdAt: t.createdAt,
-        updatedAt: t.updatedAt,
+        id: t.id, text: t.text, done: !!t.done, createdAt: t.createdAt, updatedAt: t.updatedAt,
       })),
       history: STATE.history || [],
+      children: STATE.children || [],
     };
 
     function markDirty() {
-      if (!dirty) {
-        dirty = true;
-        renderStatus();
-      }
+      if (!dirty) { dirty = true; renderStatus(); }
     }
 
     // ---- Date formatting ----
@@ -357,8 +394,7 @@
       if (m < 60) return `${m}分前`;
       const h = Math.round(m / 60);
       if (h < 24) return `${h}時間前`;
-      const days = Math.round(h / 24);
-      return `${days}日前`;
+      return `${Math.round(h / 24)}日前`;
     }
     function esc(s) {
       return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -366,13 +402,12 @@
 
     // ---- Rendering ----
     function renderHeader() {
-      document.getElementById("track-name").textContent = STATE.name || STATE.trackKey || "(名称未設定)";
+      document.getElementById("track-name").value = model.name;
       document.getElementById("project-label").textContent = "Project: " + (STATE.project || "—");
     }
 
     function renderMemo() {
-      const ta = document.getElementById("memo");
-      ta.value = model.memo;
+      document.getElementById("memo").value = model.memo;
       const foot = document.getElementById("memo-foot");
       foot.textContent = model.memoUpdatedAt
         ? `最終更新: ${fmt(model.memoUpdatedAt)}（${rel(model.memoUpdatedAt)}）`
@@ -382,8 +417,7 @@
     function renderTodos() {
       const list = document.getElementById("todo-list");
       const sorted = [...model.todos].sort((a, b) => Number(a.done) - Number(b.done));
-      const active = model.todos.filter((t) => !t.done).length;
-      document.getElementById("todo-badge").textContent = String(active);
+      document.getElementById("todo-badge").textContent = String(model.todos.filter((t) => !t.done).length);
 
       if (model.todos.length === 0) {
         list.innerHTML = '<li class="empty">TODO はまだありません。上の入力欄から追加できます。</li>';
@@ -397,27 +431,16 @@
         const updated = t.updatedAt && t.updatedAt !== t.createdAt ? ` · 更新 ${fmt(t.updatedAt)}` : "";
         li.innerHTML =
           `<input type="checkbox" ${t.done ? "checked" : ""} />` +
-          `<div class="body">` +
-          `<input class="text" type="text" value="${esc(t.text)}" />` +
-          `<div class="meta">${created}${updated}</div>` +
-          `</div>` +
+          `<div class="body"><input class="text" type="text" value="${esc(t.text)}" />` +
+          `<div class="meta">${created}${updated}</div></div>` +
           `<button class="del" title="削除">×</button>`;
 
         const cb = li.querySelector('input[type="checkbox"]');
-        cb.addEventListener("change", () => {
-          t.done = cb.checked;
-          markDirty();
-          renderTodos();
-        });
+        cb.addEventListener("change", () => { t.done = cb.checked; markDirty(); renderTodos(); });
         const txt = li.querySelector(".text");
-        txt.addEventListener("input", () => {
-          t.text = txt.value;
-          markDirty();
-        });
+        txt.addEventListener("input", () => { t.text = txt.value; markDirty(); });
         li.querySelector(".del").addEventListener("click", () => {
-          model.todos = model.todos.filter((x) => x !== t);
-          markDirty();
-          renderTodos();
+          model.todos = model.todos.filter((x) => x !== t); markDirty(); renderTodos();
         });
         list.appendChild(li);
       }
@@ -440,32 +463,45 @@
         li.innerHTML =
           `<div class="history-head">` +
           `<span class="history-when">${fmt(h.savedAt)} <span class="history-summary">（${rel(h.savedAt)}）</span></span>` +
-          `<span class="history-summary">${esc(h.summary || "")}</span>` +
-          `</div>` +
+          `<span class="history-summary">${esc(h.summary || "")}</span></div>` +
           `<div class="history-body">` +
           `<h4>メモ</h4><div class="snapshot-memo">${h.memo ? esc(h.memo) : "<span style='color:var(--p-text-2)'>（空）</span>"}</div>` +
           `<h4>TODO（${(h.todos || []).length}）</h4>${todosHtml || '<div class="snap-todo">（なし）</div>'}` +
-          `<div style="margin-top:12px"><button class="btn restore">この状態を復元</button></div>` +
-          `</div>`;
-
+          `<div style="margin-top:12px"><button class="btn restore">この状態を復元</button></div></div>`;
         li.querySelector(".history-head").addEventListener("click", () => li.classList.toggle("open"));
-        li.querySelector(".restore").addEventListener("click", (e) => {
-          e.stopPropagation();
-          restoreFrom(h);
-        });
+        li.querySelector(".restore").addEventListener("click", (e) => { e.stopPropagation(); restoreFrom(h); });
+        list.appendChild(li);
+      }
+    }
+
+    function renderChildren() {
+      const tab = document.getElementById("tab-children");
+      if (!STATE.isGroup || model.children.length === 0) { tab.hidden = true; return; }
+      tab.hidden = false;
+      document.getElementById("children-badge").textContent = String(model.children.length);
+      const list = document.getElementById("children-list");
+      list.innerHTML = "";
+      for (const c of model.children) {
+        const li = document.createElement("li");
+        li.className = "child";
+        const todosHtml = (c.todos || [])
+          .map((t) => `<div class="snap-todo ${t.done ? "done" : ""}">${t.done ? "☑" : "☐"} ${esc(t.text)}</div>`)
+          .join("");
+        const hasNotes = (c.memo && c.memo.length) || (c.todoTotal || 0) > 0;
+        li.innerHTML =
+          `<div class="child-head"><span class="child-name">${esc(c.name)}</span>` +
+          `<span class="child-prog">TODO ${c.todoActive || 0}/${c.todoTotal || 0}</span></div>` +
+          (c.memo ? `<div class="child-memo">${esc(c.memo)}</div>` : "") +
+          ((c.todoTotal || 0) > 0 ? `<h4>TODO</h4>${todosHtml}` : "") +
+          (hasNotes ? "" : `<div class="history-summary" style="margin-top:6px">（メモ・TODO なし）</div>`);
         list.appendChild(li);
       }
     }
 
     function restoreFrom(h) {
       model.memo = h.memo || "";
-      // Restored todos become new entries on next save (fresh timestamps).
       model.todos = (h.todos || []).map((t) => ({
-        id: nextLocalId--,
-        text: t.text,
-        done: !!t.done,
-        createdAt: null,
-        updatedAt: null,
+        id: nextLocalId--, text: t.text, done: !!t.done, createdAt: null, updatedAt: null,
       }));
       markDirty();
       renderMemo();
@@ -475,8 +511,8 @@
     }
 
     function renderStatus() {
-      const el = document.getElementById("status");
-      el.innerHTML = dirty ? '<span class="dot">●</span> 未保存の変更があります' : "変更なし";
+      document.getElementById("status").innerHTML =
+        dirty ? '<span class="dot">●</span> 未保存の変更があります' : "変更なし";
     }
     let statusTimer = null;
     function setStatus(msg) {
@@ -506,14 +542,13 @@
     // ---- Save / Cancel ----
     function save() {
       model.memo = document.getElementById("memo").value;
+      model.name = document.getElementById("track-name").value;
       const todos = model.todos
         .map((t) => ({ id: typeof t.id === "number" && t.id > 0 ? t.id : null, text: t.text.trim(), done: !!t.done }))
         .filter((t) => t.text.length > 0);
-      closeWith({ action: "save", memo: model.memo, todos });
+      closeWith({ action: "save", name: model.name, memo: model.memo, todos });
     }
-    function cancel() {
-      closeWith({ action: "cancel" });
-    }
+    function cancel() { closeWith({ action: "cancel" }); }
 
     // ---- Wire up ----
     document.addEventListener("DOMContentLoaded", () => {
@@ -521,30 +556,28 @@
       renderMemo();
       renderTodos();
       renderHistory();
+      renderChildren();
       renderStatus();
 
       document.querySelectorAll(".tab").forEach((t) =>
         t.addEventListener("click", () => switchTab(t.dataset.tab)),
       );
-      document.getElementById("memo").addEventListener("input", (e) => {
-        model.memo = e.target.value;
+      const nameInput = document.getElementById("track-name");
+      const nameHint = document.getElementById("name-hint");
+      nameInput.addEventListener("input", () => {
+        model.name = nameInput.value;
+        nameHint.textContent = nameInput.value.trim() && nameInput.value !== STATE.name ? "名前を変更（保存で適用）" : "";
         markDirty();
       });
+      document.getElementById("memo").addEventListener("input", (e) => { model.memo = e.target.value; markDirty(); });
       document.getElementById("todo-add-btn").addEventListener("click", addTodo);
-      document.getElementById("todo-input").addEventListener("keydown", (e) => {
-        if (e.key === "Enter") addTodo();
-      });
+      document.getElementById("todo-input").addEventListener("keydown", (e) => { if (e.key === "Enter") addTodo(); });
       document.getElementById("save-btn").addEventListener("click", save);
       document.getElementById("cancel-btn").addEventListener("click", cancel);
 
       document.addEventListener("keydown", (e) => {
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
-          e.preventDefault();
-          save();
-        } else if (e.key === "Escape") {
-          e.preventDefault();
-          cancel();
-        }
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") { e.preventDefault(); save(); }
+        else if (e.key === "Escape") { e.preventDefault(); cancel(); }
       });
 
       document.getElementById("memo").focus();

@@ -1,5 +1,5 @@
 {
-  "name": "Track Notes & TODO",
+  "name": "Track Notes",
   "author": "takahashitoru",
   "entry": "dist/extension.js",
   "version": "0.1.0",
